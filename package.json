@@ -1,0 +1,19 @@
+{
+  "name": "evalanche",
+  "version": "2.0.0",
+  "description": "Production-ready skill evaluation framework for Claude agents",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "node test-healthcheck.js",
+    "health": "node test-health.js",
+    "demo": "node demo.js",
+    "calibrate": "node -e \"import('./src/calibration.js').then(m => new m.CalibrationSystem().runCalibration().then(r => console.log(JSON.stringify(r, null, 2))))\""
+  },
+  "keywords": ["claude", "agent", "skill", "evaluation", "testing"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0"
+  }
+}
