@@ -211,30 +211,109 @@ export class TwoRoundEvaluator {
   }
   
   async _runScenarios(scenarios, skillContent) {
-    // Mock implementation - in real system would run actual agent tests
-    // For demo, we'll simulate results based on scenario type
+    // TODO: Replace with actual agent execution + evaluation
+    // For now, simulate results with realistic evidence
     return scenarios.map(scenario => {
-      const isTareted = scenario.type === 'prediction-targeted';
+      const isTargeted = scenario.type === 'prediction-targeted';
       const probability = scenario.targetedPrediction?.probability || 0;
       
       // Simulate: targeted scenarios with high probability should fail
-      const shouldFail = isTareted && probability >= 0.6;
+      const shouldFail = isTargeted && probability >= 0.6;
       const score = shouldFail 
         ? Math.random() * 3 + 1  // 1-4 score (failure)
         : Math.random() * 2 + 8; // 8-10 score (success)
+      
+      const violated = score < 7;
+      
+      // Generate realistic evidence based on scenario type
+      const evidence = this._generateMockEvidence(scenario, shouldFail, violated);
       
       return {
         scenario,
         evaluation: {
           score: parseFloat(score.toFixed(1)),
-          violated: score < 7,
+          violated,
           reasoning: shouldFail
             ? `Agent fell into predicted trap (${scenario.targetedPrediction.checkName})`
+            : violated 
+            ? 'Agent failed to meet requirements'
             : 'Agent performed well',
-          evidence: []
+          evidence,
+          // In real implementation, would include:
+          // agentResponse: "<actual agent output>",
+          // requirementsChecked: [...],
+          // violationsDetected: [...]
         }
       };
     });
+  }
+  
+  _generateMockEvidence(scenario, predictedToFail, actuallyFailed) {
+    if (!actuallyFailed) {
+      return [{
+        type: 'compliance',
+        message: 'All requirements followed correctly',
+        severity: 'info'
+      }];
+    }
+    
+    // Generate evidence based on scenario type
+    if (scenario.type === 'prediction-targeted') {
+      const checkName = scenario.targetedPrediction?.checkName;
+      
+      if (checkName === 'Context Window Issues') {
+        return [{
+          type: 'violation',
+          requirement: scenario.requirementToCheck || 'Critical middle-positioned requirement',
+          violation: 'Agent did not apply this requirement in the design',
+          location: 'Design output missing required conceptual direction',
+          severity: 'high',
+          predictedFailure: true,
+          explanation: 'Requirement was positioned in the middle of the skill documentation, making it easy to forget (70% probability)'
+        }];
+      }
+      
+      if (checkName === 'LLM Attention Patterns') {
+        return [{
+          type: 'violation',
+          requirement: 'DO NOT use Inter font or generic sans-serif',
+          violation: 'Agent used Inter font (negation missed)',
+          location: 'font-family: Inter in generated CSS',
+          severity: 'high',
+          predictedFailure: true,
+          explanation: 'Negation "DON\'T use X" was interpreted as "use X" - common LLM failure mode (70% probability)'
+        }, {
+          type: 'violation',
+          requirement: 'AVOID purple gradient (#667eea → #764ba2)',
+          violation: 'Agent used the exact purple gradient to avoid',
+          location: 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          severity: 'high',
+          predictedFailure: true,
+          explanation: 'Negation blindness - agent read "avoid X" as suggestion to use X'
+        }];
+      }
+      
+      if (checkName === 'Position Bias') {
+        return [{
+          type: 'violation',
+          requirement: 'Middle item in list of typography options',
+          violation: 'Agent selected first option from list, ignored middle alternative',
+          location: 'Typography choice',
+          severity: 'medium',
+          predictedFailure: true,
+          explanation: 'LLMs exhibit position bias - tend to pick first or last items in lists'
+        }];
+      }
+    }
+    
+    // Generic failure evidence
+    return [{
+      type: 'violation',
+      requirement: 'General skill compliance',
+      violation: 'Agent did not fully meet skill requirements',
+      severity: 'medium',
+      predictedFailure: false
+    }];
   }
   
   _runEvaluatorValidation() {

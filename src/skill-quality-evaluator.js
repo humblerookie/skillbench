@@ -17,7 +17,7 @@ export class SkillQualityEvaluator {
    * @returns {Promise<Object>} Quality evaluation report
    */
   async evaluate(skillContent, skillName) {
-    console.log(`\n🔍 Round 1: Evaluating skill quality for "${skillName}"...\n`);
+    console.log(`\n🔍 Round 1a: Evaluating skill quality for "${skillName}"...\n`);
 
     const checks = [];
 
@@ -50,7 +50,7 @@ export class SkillQualityEvaluator {
 
     return {
       skillName,
-      round: 1,
+      phase: '1a',
       type: 'skill-quality',
       summary: {
         overallScore,
