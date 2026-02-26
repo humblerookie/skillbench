@@ -136,8 +136,14 @@ export class TwoRoundEvaluator {
     const allScenarios = predictionTester.mixScenarios(targetedScenarios, normalScenarios);
     console.log(`📋 Total test suite: ${allScenarios.length} scenarios\n`);
     
-    // Run all scenarios (mock for now - would run actual agent tests)
-    const results = await this._runScenarios(allScenarios, skillContent);
+    // Get provider instance for agent execution
+    const { ProviderFactory } = await import('./providers/provider-factory.js');
+    const providerInstance = provider === 'openclaw'
+      ? ProviderFactory.create({ provider: 'openclaw' })
+      : ProviderFactory.create({ provider, apiKey });
+    
+    // Run all scenarios with REAL agent execution
+    const results = await this._runScenarios(allScenarios, skillContent, providerInstance);
     
     console.log(`\n✅ Phase 2a complete: ${results.length} tests run\n`);
     
@@ -210,42 +216,216 @@ export class TwoRoundEvaluator {
     ];
   }
   
-  async _runScenarios(scenarios, skillContent) {
-    // TODO: Replace with actual agent execution + evaluation
-    // For now, simulate results with realistic evidence
-    return scenarios.map(scenario => {
-      const isTargeted = scenario.type === 'prediction-targeted';
-      const probability = scenario.targetedPrediction?.probability || 0;
+  async _runScenarios(scenarios, skillContent, provider) {
+    const results = [];
+    
+    for (const scenario of scenarios) {
+      console.log(`\n🤖 Running agent test: ${scenario.name || scenario.id}`);
+      console.log(`   Prompt: ${scenario.userPrompt.substring(0, 60)}...`);
       
-      // Simulate: targeted scenarios with high probability should fail
-      const shouldFail = isTargeted && probability >= 0.6;
-      const score = shouldFail 
-        ? Math.random() * 3 + 1  // 1-4 score (failure)
-        : Math.random() * 2 + 8; // 8-10 score (success)
+      // STEP 1: Execute agent with skill loaded
+      const agentResponse = await this._executeAgent(
+        skillContent,
+        scenario.userPrompt,
+        provider
+      );
       
-      const violated = score < 7;
+      console.log(`   ✅ Agent response: ${agentResponse.text.length} chars`);
       
-      // Generate realistic evidence based on scenario type
-      const evidence = this._generateMockEvidence(scenario, shouldFail, violated);
+      // STEP 2: Evaluate response with LLM-as-judge
+      const evaluation = await this._evaluateResponse(
+        scenario,
+        agentResponse,
+        skillContent,
+        provider
+      );
+      
+      console.log(`   📊 Score: ${evaluation.score}/10 ${evaluation.violated ? '❌ VIOLATION' : '✅ PASS'}`);
+      
+      results.push({
+        scenario,
+        agentResponse: {
+          text: agentResponse.text,
+          model: agentResponse.model,
+          timestamp: agentResponse.timestamp
+        },
+        evaluation
+      });
+    }
+    
+    return results;
+  }
+  
+  async _executeAgent(skillContent, userPrompt, provider) {
+    // Execute agent with skill as system context
+    const startTime = Date.now();
+    
+    try {
+      const response = await provider.complete({
+        messages: [
+          {
+            role: 'system',
+            content: `You are an AI assistant. Follow this skill guide carefully:\n\n${skillContent}`
+          },
+          {
+            role: 'user',
+            content: userPrompt
+          }
+        ],
+        max_tokens: 4000
+      });
       
       return {
-        scenario,
-        evaluation: {
-          score: parseFloat(score.toFixed(1)),
-          violated,
-          reasoning: shouldFail
-            ? `Agent fell into predicted trap (${scenario.targetedPrediction.checkName})`
-            : violated 
-            ? 'Agent failed to meet requirements'
-            : 'Agent performed well',
-          evidence,
-          // In real implementation, would include:
-          // agentResponse: "<actual agent output>",
-          // requirementsChecked: [...],
-          // violationsDetected: [...]
-        }
+        text: response.content || response.text || '',
+        model: response.model || provider.getName(),
+        timestamp: new Date().toISOString(),
+        durationMs: Date.now() - startTime
       };
-    });
+    } catch (error) {
+      console.error(`   ⚠️  Agent execution failed: ${error.message}`);
+      return {
+        text: `[ERROR: Agent execution failed - ${error.message}]`,
+        model: provider.getName ? provider.getName() : 'unknown',
+        timestamp: new Date().toISOString(),
+        durationMs: Date.now() - startTime,
+        error: error.message
+      };
+    }
+  }
+  
+  async _evaluateResponse(scenario, agentResponse, skillContent, provider) {
+    // Extract requirements to check
+    const requirements = this._extractRequirements(skillContent, scenario);
+    
+    // Build LLM-as-judge evaluation prompt
+    const evaluationPrompt = `You are evaluating an AI agent's response against a skill guide.
+
+SKILL GUIDE:
+${skillContent}
+
+USER REQUEST:
+${scenario.userPrompt}
+
+AGENT'S RESPONSE:
+${agentResponse.text}
+
+REQUIREMENTS TO EVALUATE:
+${requirements.map((r, i) => `${i + 1}. ${r.text}`).join('\n')}
+
+For each requirement, determine if the agent followed it. Look for:
+- Explicit mentions or implementation
+- Violations (doing what was forbidden)
+- Missing required elements
+
+Respond ONLY with valid JSON in this exact format:
+{
+  "overallScore": <number 0-10>,
+  "violated": <boolean>,
+  "reasoning": "<brief explanation>",
+  "evidence": [
+    {
+      "requirement": "<requirement text>",
+      "followed": <boolean>,
+      "violation": "<what went wrong if not followed>",
+      "location": "<quote from agent response>",
+      "severity": "<low|medium|high>"
+    }
+  ]
+}`;
+
+    try {
+      const judgeResponse = await provider.complete({
+        messages: [
+          { role: 'user', content: evaluationPrompt }
+        ],
+        max_tokens: 2000
+      });
+      
+      const content = judgeResponse.content || judgeResponse.text || '';
+      
+      // Try to parse JSON from response
+      let evaluation;
+      try {
+        // Extract JSON if wrapped in markdown
+        const jsonMatch = content.match(/```json\n?([\s\S]*?)\n?```/) || 
+                         content.match(/\{[\s\S]*\}/);
+        const jsonStr = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : content;
+        evaluation = JSON.parse(jsonStr);
+      } catch (parseError) {
+        console.error(`   ⚠️  Failed to parse judge response: ${parseError.message}`);
+        // Fallback evaluation
+        evaluation = {
+          overallScore: 5,
+          violated: true,
+          reasoning: 'Could not parse evaluation (judge response invalid)',
+          evidence: [{
+            type: 'error',
+            message: 'Evaluation parsing failed',
+            judgeResponse: content.substring(0, 200)
+          }]
+        };
+      }
+      
+      // Ensure score is a number
+      evaluation.score = parseFloat(evaluation.overallScore);
+      evaluation.violated = evaluation.score < 7;
+      
+      return evaluation;
+      
+    } catch (error) {
+      console.error(`   ⚠️  Evaluation failed: ${error.message}`);
+      return {
+        score: 0,
+        violated: true,
+        reasoning: `Evaluation error: ${error.message}`,
+        evidence: [{
+          type: 'error',
+          message: error.message
+        }]
+      };
+    }
+  }
+  
+  _extractRequirements(skillContent, scenario) {
+    const requirements = [];
+    
+    // Extract explicit requirements (MUST, SHOULD, DO, DON'T, AVOID, NEVER)
+    const lines = skillContent.split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      
+      // Pattern 1: Bold requirements with action words
+      if (trimmed.match(/\*\*.*?(MUST|SHOULD|DO|DON'T|AVOID|NEVER|ALWAYS)/i)) {
+        const text = trimmed.replace(/\*\*/g, '');
+        requirements.push({
+          text,
+          type: 'explicit',
+          severity: text.match(/\b(MUST|NEVER|CRITICAL)\b/i) ? 'high' : 'medium'
+        });
+      }
+      
+      // Pattern 2: List items starting with action words
+      else if (trimmed.match(/^[-*]\s+(MUST|SHOULD|DO|DON'T|AVOID|NEVER|ALWAYS)/i)) {
+        const text = trimmed.replace(/^[-*]\s+/, '');
+        requirements.push({
+          text,
+          type: 'list',
+          severity: text.match(/\b(MUST|NEVER)\b/i) ? 'high' : 'medium'
+        });
+      }
+    }
+    
+    // For targeted scenarios, ensure we include the targeted requirement
+    if (scenario.targetedPrediction && scenario.requirementToCheck) {
+      requirements.unshift({
+        text: scenario.requirementToCheck,
+        type: 'targeted',
+        severity: 'high'
+      });
+    }
+    
+    // Limit to most important requirements (avoid overwhelming judge)
+    return requirements.slice(0, 10);
   }
   
   _generateMockEvidence(scenario, predictedToFail, actuallyFailed) {
