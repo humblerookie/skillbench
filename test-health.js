@@ -6,11 +6,20 @@
 import { SkillEvaluatorV2 } from './src/evaluator-v2.js';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+const USE_OPENCLAW = process.env.USE_OPENCLAW === 'true' || process.argv.includes('--openclaw');
 
-if (!ANTHROPIC_API_KEY) {
+if (!ANTHROPIC_API_KEY && !USE_OPENCLAW) {
   console.error('❌ Error: ANTHROPIC_API_KEY environment variable required');
   console.error('   Export it with: export ANTHROPIC_API_KEY=sk-ant-...');
+  console.error('   OR use OpenClaw mode: USE_OPENCLAW=true npm run health');
+  console.error('   OR: npm run health -- --openclaw');
   process.exit(1);
+}
+
+if (USE_OPENCLAW) {
+  console.log('🔧 Mode: OpenClaw (using existing auth)');
+} else {
+  console.log('🔧 Mode: Direct API (using ANTHROPIC_API_KEY)');
 }
 
 async function main() {
@@ -18,11 +27,18 @@ async function main() {
   console.log('║       Skill Evaluator V2 - Health Check                  ║');
   console.log('╚═══════════════════════════════════════════════════════════╝\n');
 
-  const evaluator = new SkillEvaluatorV2(ANTHROPIC_API_KEY, {
-    validateEvidence: true,
-    runCalibration: true,
-    acceptableVariance: 1.0
-  });
+  const evaluator = USE_OPENCLAW
+    ? new SkillEvaluatorV2({
+        useOpenClaw: true,
+        validateEvidence: true,
+        runCalibration: true,
+        acceptableVariance: 1.0
+      })
+    : new SkillEvaluatorV2(ANTHROPIC_API_KEY, {
+        validateEvidence: true,
+        runCalibration: true,
+        acceptableVariance: 1.0
+      });
 
   // Run full diagnostic suite
   const health = await evaluator.runDiagnostics();
