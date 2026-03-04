@@ -1,0 +1,9 @@
+{
+  "test": "Embedded Skill Test",
+  "timestamp": "2026-02-26T11:27:55+00:00",
+  "results": {
+    "score": 7.5,
+    "violated": true,
+    "violationCount": 1
+  }
+}

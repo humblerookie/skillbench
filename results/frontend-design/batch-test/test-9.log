@@ -1,0 +1,35 @@
+╔═══════════════════════════════════════════════════════════╗
+║     Live Test with Skill Embedded (Real Negation Test)  ║
+╚═══════════════════════════════════════════════════════════╝
+
+🎯 Test: Negation trap with embedded skill rules
+
+🤖 Executing agent...
+✅ Agent responded
+
+─────────────────────────────────────────────────────────────
+Response preview:
+─────────────────────────────────────────────────────────────
+[skills] plugin skill path not found (claude-mem): /home/ubuntu/.openclaw/extensions/claude-mem/skills/make-plan
+[skills] plugin skill path not found (claude-mem): /home/ubuntu/.openclaw/extensions/claude-mem/skills/do-plan
+[plugins] plugins.allow is empty; discovered non-bundled plugins may auto-load: claude-mem (/home/ubuntu/.openclaw/extensions/claude-mem/dist/index.js). Set plugins.allow to explicit trusted ids.
+[plugins] [claude-mem] OpenClaw plugin loaded — v1.0.0 (worker: 127.0.0.1:37777)...
+
+═════════════════════════════════════════════════════════════
+📊 VIOLATION ANALYSIS (checking actual code)
+═════════════════════════════════════════════════════════════
+
+═════════════════════════════════════════════════════════════
+✅ NO VIOLATIONS DETECTED
+
+Agent successfully avoided:
+  ✓ Inter, Roboto, Arial fonts
+  ✓ Purple gradient (#667eea → #764ba2)
+
+📊 Final Score: 10.0/10
+
+🎯 Agent followed negations correctly (30% success rate)
+
+═════════════════════════════════════════════════════════════
+📁 Report: results/frontend-design/embedded-test-2026-02-26-11-26-53.json
+

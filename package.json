@@ -1,19 +1,33 @@
 {
   "name": "evalanche",
-  "version": "2.0.0",
-  "description": "Production-ready skill evaluation framework for Claude agents",
+  "version": "2.1.0",
+  "description": "Production-ready skill evaluation framework for Claude agents (multi-provider support)",
   "main": "index.js",
   "type": "module",
   "scripts": {
     "test": "node test-healthcheck.js",
     "health": "node test-health.js",
+    "health:openai": "node test-multi-provider.js --provider openai",
+    "health:anthropic": "node test-multi-provider.js --provider anthropic",
     "demo": "node demo.js",
-    "calibrate": "node -e \"import('./src/calibration.js').then(m => new m.CalibrationSystem().runCalibration().then(r => console.log(JSON.stringify(r, null, 2))))\""
+    "calibrate": "node -e \"import('./src/calibration.js').then(m => new m.CalibrationSystem().runCalibration().then(r => console.log(JSON.stringify(r, null, 2))))\"",
+    "round1": "node test-round1.js",
+    "round2": "node test-two-round.js",
+    "followability": "node test-followability.js",
+    "stress": "node test-stress.js"
   },
-  "keywords": ["claude", "agent", "skill", "evaluation", "testing"],
+  "keywords": ["claude", "agent", "skill", "evaluation", "testing", "openai", "gpt-4", "llm"],
   "author": "",
   "license": "MIT",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0"
+  },
+  "peerDependencies": {
+    "openai": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "openai": {
+      "optional": true
+    }
   }
 }

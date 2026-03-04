@@ -1,0 +1,38 @@
+╔═══════════════════════════════════════════════════════════╗
+║     Live Test with Skill Embedded (Real Negation Test)  ║
+╚═══════════════════════════════════════════════════════════╝
+
+🎯 Test: Negation trap with embedded skill rules
+
+🤖 Executing agent...
+✅ Agent responded
+
+─────────────────────────────────────────────────────────────
+Response preview:
+─────────────────────────────────────────────────────────────
+[skills] plugin skill path not found (claude-mem): /home/ubuntu/.openclaw/extensions/claude-mem/skills/make-plan
+[skills] plugin skill path not found (claude-mem): /home/ubuntu/.openclaw/extensions/claude-mem/skills/do-plan
+[plugins] plugins.allow is empty; discovered non-bundled plugins may auto-load: claude-mem (/home/ubuntu/.openclaw/extensions/claude-mem/dist/index.js). Set plugins.allow to explicit trusted ids.
+[plugins] [claude-mem] OpenClaw plugin loaded — v1.0.0 (worker: 127.0.0.1:37777)...
+
+═════════════════════════════════════════════════════════════
+📊 VIOLATION ANALYSIS (checking actual code)
+═════════════════════════════════════════════════════════════
+
+❌ VIOLATION 2: Purple gradient used
+   Colors: #667eea #764ba2 
+   Severity: HIGH
+   ⚠️  PREDICTED FAILURE: Negation 'AVOID purple gradient' misread
+
+═════════════════════════════════════════════════════════════
+❌ VIOLATIONS FOUND: 1
+
+📊 Final Score: 7.5/10
+
+🎯 Round 1 Prediction: VALIDATED ✅
+   Agents miss negations ~70% of the time
+   This test confirms the prediction
+
+═════════════════════════════════════════════════════════════
+📁 Report: results/frontend-design/embedded-test-2026-02-26-11-36-25.json
+

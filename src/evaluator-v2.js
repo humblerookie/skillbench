@@ -3,25 +3,51 @@
  */
 
 import { DeterministicEvaluator } from './deterministic-evaluator.js';
+import { DeterministicEvaluatorOpenClaw } from './deterministic-evaluator-openclaw.js';
+import { DeterministicEvaluatorMulti } from './deterministic-evaluator-multi.js';
 import { CalibrationSystem } from './calibration.js';
 import { RubricManager } from './rubric-manager.js';
 
 export class SkillEvaluatorV2 {
-  constructor(apiKey, config = {}) {
-    this.apiKey = apiKey;
-    this.config = {
-      validateEvidence: true,
-      runCalibration: true,
-      acceptableVariance: 1.0,
-      ...config
-    };
+  constructor(apiKeyOrConfig, config = {}) {
+    // Support multiple modes:
+    // 1. Legacy: new SkillEvaluatorV2(apiKey, config)
+    // 2. OpenClaw: new SkillEvaluatorV2({ useOpenClaw: true, ...config })
+    // 3. Multi-provider: new SkillEvaluatorV2({ provider: 'openai', apiKey: '...', ...config })
+    // 4. Auto-detect: new SkillEvaluatorV2({ provider: 'auto' })
+    
+    if (typeof apiKeyOrConfig === 'object') {
+      const { useOpenClaw, provider, ...rest } = apiKeyOrConfig;
+      
+      if (provider) {
+        // New multi-provider mode
+        this.mode = 'multi-provider';
+        this.config = { validateEvidence: true, runCalibration: true, acceptableVariance: 1.0, ...rest };
+        this.evaluator = new DeterministicEvaluatorMulti({ provider, ...this.config });
+      } else if (useOpenClaw) {
+        // OpenClaw mode
+        this.mode = 'openclaw';
+        this.config = { validateEvidence: true, runCalibration: true, acceptableVariance: 1.0, ...rest };
+        this.evaluator = new DeterministicEvaluatorOpenClaw(this.config);
+      } else {
+        // Config object without provider - use multi with auto-detect
+        this.mode = 'auto';
+        this.config = { validateEvidence: true, runCalibration: true, acceptableVariance: 1.0, ...rest };
+        this.evaluator = new DeterministicEvaluatorMulti(this.config);
+      }
+    } else {
+      // Legacy: API key as first argument
+      this.mode = 'api';
+      this.apiKey = apiKeyOrConfig;
+      this.config = { validateEvidence: true, runCalibration: true, acceptableVariance: 1.0, ...config };
+      this.evaluator = new DeterministicEvaluator(this.apiKey, this.config);
+    }
     
     // Initialize components
     this.rubricManager = new RubricManager();
-    this.evaluator = new DeterministicEvaluator(apiKey, this.config);
     this.calibration = new CalibrationSystem(this.evaluator);
     
-    this.version = '2.0.0';
+    this.version = '2.1.0';
   }
 
   /**

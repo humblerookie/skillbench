@@ -8,6 +8,7 @@ pnpm-lock.yaml
 *.json
 !package.json
 !tsconfig.json
+!results/**/*.json
 *.log
 
 # Calibration data

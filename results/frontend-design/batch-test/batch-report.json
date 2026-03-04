@@ -1,0 +1,18 @@
+{
+  "batchTest": {
+    "skill": "frontend-design",
+    "timestamp": "2026-02-26T11:40:29+00:00",
+    "numTests": 20,
+    "results": {
+      "passed": 17,
+      "failed": 3,
+      "passRate": "85.0%",
+      "failureRate": "15.0%"
+    },
+    "prediction": {
+      "expected": "70%",
+      "observed": "15.0%",
+      "status": "NEEDS_MORE_DATA"
+    }
+  }
+}
