@@ -16,6 +16,8 @@ import { Round1Evaluator } from './round1-evaluator.js';
 import { SkillEvaluatorV2 } from './evaluator-v2.js';
 import { SkillStressTester } from './stress-tester.js';
 import { PredictionTargetedTesting } from './prediction-targeted-testing.js';
+import { SkillParser } from './parser.js';
+import { ScenarioGenerator } from './generator.js';
 import fs from 'fs';
 
 export class TwoRoundEvaluator {
@@ -34,7 +36,8 @@ export class TwoRoundEvaluator {
       provider = 'openclaw',
       apiKey,
       outputDir = 'results',
-      scenariosPerRequirement = 2
+      scenariosPerRequirement = 2,
+      maxScenarios = 10
     } = options;
 
     console.log('╔═══════════════════════════════════════════════════════════╗');
@@ -66,7 +69,7 @@ export class TwoRoundEvaluator {
       console.log('╚═══════════════════════════════════════════════════════════╝\n');
 
       const round2Start = Date.now();
-      round2Report = await this._runRound2(skillPath, skillName, provider, apiKey, round1Report, scenariosPerRequirement);
+      round2Report = await this._runRound2(skillPath, skillName, provider, apiKey, round1Report, scenariosPerRequirement, maxScenarios);
       round2Duration = Date.now() - round2Start;
 
       console.log(`\n✅ Round 2 complete (${(round2Duration / 1000).toFixed(1)}s)\n`);
@@ -114,64 +117,121 @@ export class TwoRoundEvaluator {
     return await round1Evaluator.evaluate(skillContent, skillName);
   }
 
-  async _runRound2(skillPath, skillName, provider, apiKey, round1Report, scenariosPerRequirement = 2) {
+  async _runRound2(skillPath, skillName, provider, apiKey, round1Report, scenariosPerRequirement = 2, maxScenarios = 10) {
     const skillContent = fs.readFileSync(skillPath, 'utf-8');
-    
-    // Initialize prediction-targeted testing
-    const predictionTester = new PredictionTargetedTesting();
-    
-    console.log('─────────────────────────────────────────────────────────────');
-    console.log('  Phase 2a: Compliance Testing (Normal + Targeted)');
-    console.log('─────────────────────────────────────────────────────────────\n');
-    
-    // Generate prediction-targeted scenarios from Round 1
-    const targetedScenarios = predictionTester.generateTargetedScenarios(round1Report, skillContent);
-    console.log(`✅ Generated ${targetedScenarios.length} prediction-targeted scenarios\n`);
-    
-    // Generate normal compliance scenarios
-    const normalScenarios = this._generateNormalScenarios(skillName);
-    console.log(`✅ Generated ${normalScenarios.length} normal compliance scenarios\n`);
-    
-    // Mix targeted and normal scenarios
-    const allScenarios = predictionTester.mixScenarios(targetedScenarios, normalScenarios);
-    console.log(`📋 Total test suite: ${allScenarios.length} scenarios\n`);
-    
-    // Get provider instance for agent execution
+
+    // Get provider instance (shared across all phases)
     const { ProviderFactory } = await import('./providers/provider-factory.js');
     const providerInstance = provider === 'openclaw'
       ? ProviderFactory.create({ provider: 'openclaw' })
       : ProviderFactory.create({ provider, apiKey });
-    
+
+    // Initialize prediction-targeted testing
+    const predictionTester = new PredictionTargetedTesting();
+
+    console.log('─────────────────────────────────────────────────────────────');
+    console.log('  Phase 2a: Compliance Testing (LLM-Generated + Targeted)');
+    console.log('─────────────────────────────────────────────────────────────\n');
+
+    // Generate prediction-targeted scenarios from Round 1
+    const targetedScenarios = predictionTester.generateTargetedScenarios(round1Report, skillContent);
+    console.log(`✅ Generated ${targetedScenarios.length} prediction-targeted scenarios\n`);
+
+    // Parse skill and generate skill-specific scenarios via LLM
+    console.log(`🔍 Parsing skill requirements for scenario generation...`);
+    let normalScenarios = [];
+    try {
+      const parser = new SkillParser(providerInstance);
+      const parsedSkill = await parser.parse(skillContent);
+      console.log(`   Found ${parsedSkill.metadata.totalRequirements} requirements\n`);
+
+      const generator = new ScenarioGenerator(providerInstance);
+      const generated = await generator.generate(parsedSkill, scenariosPerRequirement);
+
+      normalScenarios = generated.scenarios.map(s => ({
+        id: s.testId,
+        type: 'normal-compliance',
+        name: `${s.requirementId} Compliance Test`,
+        userPrompt: s.userPrompt,
+        expectedBehavior: s.expectedBehavior,
+        violationIndicators: s.violationIndicators
+      }));
+      console.log(`✅ Generated ${normalScenarios.length} skill-specific scenarios\n`);
+    } catch (err) {
+      console.warn(`  ⚠️  Scenario generation failed: ${err.message}`);
+      console.warn(`  Falling back to 0 normal scenarios\n`);
+    }
+
+    // Targeted always first, normal fills remaining cap
+    const remainingSlots = Math.max(0, maxScenarios - targetedScenarios.length);
+    const cappedNormal = normalScenarios.slice(0, remainingSlots);
+    const allScenarios = [...targetedScenarios, ...cappedNormal];
+
+    if (normalScenarios.length > remainingSlots) {
+      console.log(`⚠️  Capped normal scenarios at ${remainingSlots} (${normalScenarios.length} generated)\n`);
+    }
+    console.log(`📋 Total test suite: ${allScenarios.length} scenarios (${targetedScenarios.length} targeted + ${cappedNormal.length} normal)\n`);
+
     // Run all scenarios with REAL agent execution
     const results = await this._runScenarios(allScenarios, skillContent, providerInstance);
-    
+
     console.log(`\n✅ Phase 2a complete: ${results.length} tests run\n`);
-    
+
     // Phase 2b: Evaluator Validation
     console.log('─────────────────────────────────────────────────────────────');
     console.log('  Phase 2b: Evaluator Validation');
     console.log('─────────────────────────────────────────────────────────────\n');
-    
+
     const validationResult = this._runEvaluatorValidation();
     console.log(`✅ Phase 2b complete: ${validationResult.status}\n`);
-    
+
     // Generate prediction validation report
     console.log('─────────────────────────────────────────────────────────────');
     console.log('  Prediction Validation Analysis');
     console.log('─────────────────────────────────────────────────────────────\n');
-    
+
     const validation = predictionTester.analyzeValidation(results, round1Report);
     const validationReport = predictionTester.generateValidationReport(validation, round1Report, null);
-    
+
     console.log(`📊 Prediction Accuracy: ${validationReport.summary.predictionAccuracy}`);
     console.log(`   Validated: ${validationReport.summary.validatedCount}`);
     console.log(`   Invalidated: ${validationReport.summary.invalidatedCount}\n`);
-    
-    // Calculate summary statistics
+
+    // Phase 2c: Stress Testing
+    console.log('─────────────────────────────────────────────────────────────');
+    console.log('  Phase 2c: Stress Testing (Edge Cases + Adversarial)');
+    console.log('─────────────────────────────────────────────────────────────\n');
+
+    const stressTester = new SkillStressTester(providerInstance);
+    const stressScenarios = await stressTester.generateStressTests(skillContent, skillName);
+    console.log(`✅ Generated ${stressScenarios.length} stress test scenarios\n`);
+
+    const stressResults = [];
+    for (const scenario of stressScenarios) {
+      console.log(`\n💥 Stress test: ${scenario.id} (${scenario.category})`);
+      console.log(`   Prompt: ${scenario.userPrompt.substring(0, 60)}...`);
+
+      const agentResponse = await this._executeAgent(skillContent, scenario.userPrompt, providerInstance);
+      console.log(`   ✅ Agent response: ${agentResponse.text.length} chars`);
+
+      const evaluation = await stressTester.runStressTest(scenario, skillContent, agentResponse.text);
+      const overallScore = evaluation?.overall_score ?? 'N/A';
+      console.log(`   📊 Stress score: ${overallScore}/10`);
+
+      stressResults.push({ scenario, agentResponse: { text: agentResponse.text }, evaluation });
+    }
+
+    const stressReport = stressTester.generateStressTestReport(stressResults);
+    console.log(`\n✅ Phase 2c complete: ${stressResults.length} stress tests`);
+    console.log(`   Resilience: ${stressReport.summary.averageResilience}/10`);
+    console.log(`   Judgment:   ${stressReport.summary.averageJudgment}/10`);
+    console.log(`   Overall:    ${stressReport.summary.overallStressScore}/10\n`);
+
+    // Calculate compliance summary statistics
     const scores = results.map(r => r.evaluation?.score || 0);
     const averageScore = parseFloat((scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1));
     const passRate = `${(results.filter(r => (r.evaluation?.score || 0) >= 7).length / results.length * 100).toFixed(0)}%`;
-    
+
     return {
       skillName,
       round: 2,
@@ -184,36 +244,18 @@ export class TwoRoundEvaluator {
           results
         },
         '2b_validation': validationResult,
-        prediction_validation: validationReport
+        prediction_validation: validationReport,
+        '2c_stress': stressReport
       },
       summary: {
         totalTests: results.length,
         averageScore,
         passRate,
-        predictionAccuracy: validationReport.summary.predictionAccuracy
+        predictionAccuracy: validationReport.summary.predictionAccuracy,
+        stressScore: stressReport.summary.overallStressScore
       },
       evaluations: results
     };
-  }
-  
-  _generateNormalScenarios(skillName) {
-    // For frontend-design: generate baseline compliance scenarios
-    return [
-      {
-        id: 'NORMAL-1',
-        type: 'normal-compliance',
-        name: 'Architect Portfolio (Baseline)',
-        userPrompt: 'Create a portfolio page for a minimalist architect',
-        expectedBehavior: 'Agent follows all requirements normally'
-      },
-      {
-        id: 'NORMAL-2',
-        type: 'normal-compliance',
-        name: 'Crypto Dashboard (Baseline)',
-        userPrompt: 'Build a dashboard for a crypto trading platform',
-        expectedBehavior: 'Agent follows design thinking and distinctive typography'
-      }
-    ];
   }
   
   async _runScenarios(scenarios, skillContent, provider) {
@@ -589,6 +631,7 @@ Respond ONLY with valid JSON in this exact format:
       console.log('Round 2 (Agent Testing):');
       console.log(`  2a. Compliance: ${report.round2.summary.averageScore}/10 (${report.round2.summary.passRate} pass)`);
       console.log(`  2b. Validation: ${report.round2.phases?.['2b_validation']?.status || 'N/A'}`);
+      console.log(`  2c. Stress Score: ${report.round2.summary.stressScore}/10`);
       console.log(`  📊 Prediction Accuracy: ${report.round2.summary.predictionAccuracy}`);
       console.log(`  Duration: ${(report.round2.durationMs / 1000).toFixed(1)}s\n`);
     }
