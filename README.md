@@ -174,7 +174,7 @@ import { SkillParser, ScenarioGenerator, SkillEvaluatorV2 } from 'skillbench';
 Results are printed to the console and saved as JSON:
 
 ```
-results/<skill-name>/two-round-evaluation-<timestamp>.json
+results/<skill-name>/skillbench-results-<timestamp>.json
 ```
 
 The JSON contains every score, scenario, agent response, and recommendation. All recommendations are preserved in `report.overallAssessment.recommendations`.
