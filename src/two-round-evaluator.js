@@ -658,7 +658,7 @@ Respond ONLY with valid JSON in this exact format:
     fs.mkdirSync(dir, { recursive: true });
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `${dir}/two-round-evaluation-${timestamp}.json`;
+    const filename = `${dir}/skillbench-results-${timestamp}.json`;
 
     fs.writeFileSync(filename, JSON.stringify(report, null, 2));
     console.log(`\n📁 Report saved: ${filename}`);
