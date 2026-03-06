@@ -621,9 +621,7 @@ Respond ONLY with valid JSON in this exact format:
         message: r1Score >= 7
           ? 'Skill follows best practices. Proceed to Round 2 testing.'
           : `Skill quality needs improvement (${r1Score}/10). Fix Round 1 issues before agent testing.`,
-        recommendations: round1Report.checks
-          .filter(c => !c.passed)
-          .map(c => c.recommendation)
+        recommendations: round1Report.recommendations || []
       };
     }
 
