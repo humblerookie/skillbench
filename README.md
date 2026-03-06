@@ -214,8 +214,8 @@ Round 2 (live agent testing)
 ## Development
 
 ```bash
-git clone https://github.com/humblerookie/evalanche.git
-cd evalanche
+git clone https://github.com/humblerookie/skillbench.git
+cd skillbench
 npm install
 
 # Run evaluation
@@ -237,5 +237,5 @@ node test-two-round.js results/sample/frontend-design.md
 
 MIT — see [LICENSE](LICENSE) for details.
 
-**Repository**: https://github.com/humblerookie/evalanche
-**Issues**: https://github.com/humblerookie/evalanche/issues
+**Repository**: https://github.com/humblerookie/skillbench
+**Issues**: https://github.com/humblerookie/skillbench/issues
