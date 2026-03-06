@@ -1,24 +1,49 @@
 {
-  "name": "evalanche",
+  "name": "skillbench",
   "version": "2.1.0",
-  "description": "Production-ready skill evaluation framework for Claude agents (multi-provider support)",
-  "main": "index.js",
+  "description": "Skill evaluation framework for Claude agents — static analysis + live agent testing",
   "type": "module",
-  "scripts": {
-    "test": "node test-healthcheck.js",
-    "health": "node test-health.js",
-    "health:openai": "node test-multi-provider.js --provider openai",
-    "health:anthropic": "node test-multi-provider.js --provider anthropic",
-    "demo": "node demo.js",
-    "calibrate": "node -e \"import('./src/calibration.js').then(m => new m.CalibrationSystem().runCalibration().then(r => console.log(JSON.stringify(r, null, 2))))\"",
-    "round1": "node test-round1.js",
-    "round2": "node test-two-round.js",
-    "followability": "node test-followability.js",
-    "stress": "node test-stress.js"
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js"
   },
-  "keywords": ["claude", "agent", "skill", "evaluation", "testing", "openai", "gpt-4", "llm"],
-  "author": "",
+  "bin": {
+    "skillbench": "./test-two-round.js"
+  },
+  "files": [
+    "src/",
+    "index.js",
+    "test-two-round.js",
+    "LICENSE",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "evaluate": "node test-two-round.js",
+    "test": "echo 'No automated tests yet' && exit 0"
+  },
+  "keywords": [
+    "claude",
+    "agent",
+    "skill",
+    "evaluation",
+    "testing",
+    "llm",
+    "anthropic",
+    "openai"
+  ],
+  "author": "humblerookie",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/humblerookie/skillbench.git"
+  },
+  "bugs": {
+    "url": "https://github.com/humblerookie/skillbench/issues"
+  },
+  "homepage": "https://github.com/humblerookie/skillbench#readme",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0"
   },

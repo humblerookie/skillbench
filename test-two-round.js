@@ -1,23 +1,71 @@
 #!/usr/bin/env node
 /**
- * Test Two-Round Evaluation System
- * 
- * Round 1: Skill Quality (best practices compliance)
- * Round 2: Agent Effectiveness (do agents follow it?)
+ * Two-Round Skill Evaluation
+ *
+ * Round 1: Static analysis (skill quality, best practices, followability)
+ * Round 2: Agent testing (LLM-generated compliance + stress testing)
+ *
+ * Usage:
+ *   node test-two-round.js <path-to-SKILL.md> [--scenarios N]
+ *
+ * Options:
+ *   --scenarios N      Number of LLM-generated scenarios per requirement (default: 2)
+ *   --provider NAME    Force a specific provider (anthropic, openai, claude-code)
+ *
+ * Provider auto-detection (when --provider not set):
+ *   ANTHROPIC_API_KEY → anthropic
+ *   OPENAI_API_KEY    → openai
+ *   (none)            → claude-code (uses local Claude subscription)
  */
 
 import { TwoRoundEvaluator } from './src/two-round-evaluator.js';
 
-const skillPath = process.argv[2] || '/tmp/skills/skills/frontend-design/SKILL.md';
+const args = process.argv.slice(2);
+
+// Parse skill path (first non-flag argument, skipping values of --key val flags)
+const flagsWithValues = new Set(['--scenarios', '--max-scenarios', '--provider']);
+let skillPath = null;
+for (let i = 0; i < args.length; i++) {
+  if (flagsWithValues.has(args[i])) { i++; continue; }
+  if (!args[i].startsWith('--')) { skillPath = args[i]; break; }
+}
+skillPath = skillPath || '/tmp/skills/SKILL.md';
+
+// Parse --scenarios N
+const scenariosIdx = args.indexOf('--scenarios');
+const scenariosPerRequirement = scenariosIdx !== -1 ? parseInt(args[scenariosIdx + 1], 10) : 2;
+
+if (isNaN(scenariosPerRequirement) || scenariosPerRequirement < 1) {
+  console.error('❌ --scenarios must be a positive integer');
+  process.exit(1);
+}
+
+// Parse --max-scenarios N
+const maxIdx = args.indexOf('--max-scenarios');
+const maxScenarios = maxIdx !== -1 ? parseInt(args[maxIdx + 1], 10) : 20;
+
+if (isNaN(maxScenarios) || maxScenarios < 1) {
+  console.error('❌ --max-scenarios must be a positive integer');
+  process.exit(1);
+}
+
+// Parse --provider NAME
+const providerIdx = args.indexOf('--provider');
+const provider = providerIdx !== -1
+  ? args[providerIdx + 1]
+  : process.env.ANTHROPIC_API_KEY ? 'anthropic' : process.env.OPENAI_API_KEY ? 'openai' : 'claude-code';
+const apiKey = process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY;
 
 async function main() {
   const evaluator = new TwoRoundEvaluator();
 
   const report = await evaluator.evaluate({
     skillPath,
-    provider: 'openclaw', // Use OpenClaw provider (no API key needed)
+    provider,
+    apiKey,
     outputDir: 'results',
-    scenariosPerRequirement: 2
+    scenariosPerRequirement,
+    maxScenarios
   });
 
   process.exit(report.overallAssessment.status === 'EXCELLENT' || report.overallAssessment.status === 'GOOD' ? 0 : 1);
