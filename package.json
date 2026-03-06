@@ -1,6 +1,6 @@
 {
   "name": "skillbench",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Skill evaluation framework for Claude agents — static analysis + live agent testing",
   "type": "module",
   "main": "index.js",
