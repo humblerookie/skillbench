@@ -19,6 +19,7 @@ import { PredictionTargetedTesting } from './prediction-targeted-testing.js';
 import { SkillParser } from './parser.js';
 import { ScenarioGenerator } from './generator.js';
 import fs from 'fs';
+import path from 'path';
 
 export class TwoRoundEvaluator {
   constructor(config = {}) {
@@ -44,12 +45,12 @@ export class TwoRoundEvaluator {
     console.log('║         Two-Round Skill Evaluation                       ║');
     console.log('╚═══════════════════════════════════════════════════════════╝\n');
 
-    // Read skill file
-    const skillContent = fs.readFileSync(skillPath, 'utf-8');
+    // Read skill file (accepts a SKILL.md path or a skill directory)
+    const { skillFilePath, skillContent } = this._loadSkill(skillPath);
     const skillName = this._extractSkillName(skillContent, skillPath);
 
     console.log(`📄 Skill: ${skillName}`);
-    console.log(`📂 Path: ${skillPath}`);
+    console.log(`📂 Path: ${skillFilePath}`);
     console.log(`🔧 Provider: ${provider}\n`);
 
     // ROUND 1: Static Analysis
@@ -117,8 +118,8 @@ export class TwoRoundEvaluator {
     return await round1Evaluator.evaluate(skillContent, skillName);
   }
 
-  async _runRound2(skillPath, skillName, provider, apiKey, round1Report, scenariosPerRequirement = 2, maxScenarios = 10) {
-    const skillContent = fs.readFileSync(skillPath, 'utf-8');
+  async _runRound2(skillPath, skillName, provider, apiKey, round1Report, scenariosPerRequirement = 2, maxScenarios = 20) {
+    const { skillContent } = this._loadSkill(skillPath);
 
     // Get provider instance (shared across all phases)
     const { ProviderFactory } = await import('./providers/provider-factory.js');
@@ -136,6 +137,19 @@ export class TwoRoundEvaluator {
     // Generate prediction-targeted scenarios from Round 1
     const targetedScenarios = predictionTester.generateTargetedScenarios(round1Report, skillContent);
     console.log(`✅ Generated ${targetedScenarios.length} prediction-targeted scenarios\n`);
+
+    // Print budget plan upfront so user knows what's coming
+    const remaining = Math.max(0, maxScenarios - targetedScenarios.length);
+    const complianceBudget = Math.ceil(remaining * 0.6);
+    const stressBudget = remaining - complianceBudget;
+
+    console.log('┌─────────────────────────────────────────────────────────┐');
+    console.log(`│  Test Budget: ${maxScenarios} total scenarios`);
+    console.log('│');
+    console.log(`│  2a  Targeted (Round 1 predictions): ${targetedScenarios.length}`);
+    console.log(`│  2a  Normal compliance:               up to ${complianceBudget}`);
+    console.log(`│  2c  Stress tests:                    up to ${stressBudget}`);
+    console.log('└─────────────────────────────────────────────────────────┘\n');
 
     // Parse skill and generate skill-specific scenarios via LLM
     console.log(`🔍 Parsing skill requirements for scenario generation...`);
@@ -162,13 +176,12 @@ export class TwoRoundEvaluator {
       console.warn(`  Falling back to 0 normal scenarios\n`);
     }
 
-    // Targeted always first, normal fills remaining cap
-    const remainingSlots = Math.max(0, maxScenarios - targetedScenarios.length);
-    const cappedNormal = normalScenarios.slice(0, remainingSlots);
+    // Apply budget: targeted always first, normal fills compliance slot
+    const cappedNormal = normalScenarios.slice(0, complianceBudget);
     const allScenarios = [...targetedScenarios, ...cappedNormal];
 
-    if (normalScenarios.length > remainingSlots) {
-      console.log(`⚠️  Capped normal scenarios at ${remainingSlots} (${normalScenarios.length} generated)\n`);
+    if (normalScenarios.length > complianceBudget) {
+      console.log(`⚠️  Capped normal scenarios at ${complianceBudget} (${normalScenarios.length} generated)\n`);
     }
     console.log(`📋 Total test suite: ${allScenarios.length} scenarios (${targetedScenarios.length} targeted + ${cappedNormal.length} normal)\n`);
 
@@ -203,8 +216,12 @@ export class TwoRoundEvaluator {
     console.log('─────────────────────────────────────────────────────────────\n');
 
     const stressTester = new SkillStressTester(providerInstance);
-    const stressScenarios = await stressTester.generateStressTests(skillContent, skillName);
-    console.log(`✅ Generated ${stressScenarios.length} stress test scenarios\n`);
+    const allStressScenarios = await stressTester.generateStressTests(skillContent, skillName);
+    const stressScenarios = allStressScenarios.slice(0, stressBudget);
+    if (allStressScenarios.length > stressBudget) {
+      console.log(`⚠️  Capped stress tests at ${stressBudget} (${allStressScenarios.length} generated)`);
+    }
+    console.log(`✅ Running ${stressScenarios.length} stress test scenarios\n`);
 
     const stressResults = [];
     for (const scenario of stressScenarios) {
@@ -548,12 +565,51 @@ Respond ONLY with valid JSON in this exact format:
     };
   }
 
+  /**
+   * Resolve a skill path (file or directory) and load its full content.
+   * If given a directory, reads SKILL.md and inlines any referenced supporting
+   * markdown files so evaluators see the complete skill context.
+   *
+   * @param {string} inputPath - Path to SKILL.md or skill directory
+   * @returns {{ skillFilePath: string, skillContent: string }}
+   */
+  _loadSkill(inputPath) {
+    const stat = fs.statSync(inputPath);
+    const skillFilePath = stat.isDirectory()
+      ? path.join(inputPath, 'SKILL.md')
+      : inputPath;
+
+    const skillDir = path.dirname(skillFilePath);
+    let skillContent = fs.readFileSync(skillFilePath, 'utf-8');
+
+    // Inline referenced supporting markdown files (e.g. [reference.md](reference.md))
+    // Only include files that live inside the skill directory — not external links.
+    const refPattern = /\[([^\]]+)\]\(([^)]+\.md)\)/g;
+    let match;
+    const inlined = new Set();
+    while ((match = refPattern.exec(skillContent)) !== null) {
+      const refFile = match[2];
+      // Skip absolute URLs and paths outside the skill dir
+      if (refFile.startsWith('http') || refFile.startsWith('/') || refFile.startsWith('..')) continue;
+      const refPath = path.join(skillDir, refFile);
+      if (!inlined.has(refPath) && fs.existsSync(refPath)) {
+        const refContent = fs.readFileSync(refPath, 'utf-8');
+        skillContent += `\n\n<!-- Supporting file: ${refFile} -->\n${refContent}`;
+        inlined.add(refPath);
+      }
+    }
+
+    return { skillFilePath, skillContent };
+  }
+
   _extractSkillName(skillContent, skillPath) {
     const match = skillContent.match(/^---\n[\s\S]*?name:\s*([^\n]+)\n/);
     if (match) {
       return match[1].trim();
     }
-    return skillPath.split('/').pop().replace(/\.md$/, '');
+    // For a directory input, use the directory name; for a file, strip .md
+    const base = path.basename(skillPath);
+    return base.endsWith('.md') ? base.slice(0, -3) : base;
   }
 
   _generateOverallAssessment(round1Report, round2Report) {

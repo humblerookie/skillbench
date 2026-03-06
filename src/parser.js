@@ -2,11 +2,9 @@
  * Skill Parser - Extract testable requirements from SKILL.md
  */
 
-import Anthropic from '@anthropic-ai/sdk';
-
 export class SkillParser {
-  constructor(apiKey) {
-    this.client = new Anthropic({ apiKey });
+  constructor(provider) {
+    this.provider = provider;
   }
 
   /**
@@ -24,16 +22,16 @@ Extract requirements into these categories:
 
 1. **Commands/Actions** - Specific actions the agent must perform
    - Example: "Run openclaw security audit --deep"
-   
+
 2. **Constraints** - Rules/limits the agent must obey
    - Example: "Never modify firewall without confirmation"
-   
+
 3. **Workflow Steps** - Sequential procedures to follow
    - Example: "1. Check context 2. Determine risk 3. Produce plan"
-   
+
 4. **Format Requirements** - Output/response formatting rules
    - Example: "Provide numbered choices so user can reply with single digit"
-   
+
 5. **Conditional Logic** - If/then rules
    - Example: "If unsure, ask before acting"
 
@@ -66,23 +64,20 @@ Return ONLY valid JSON (no markdown, no explanation):
   }
 }`;
 
-    const response = await this.client.messages.create({
-      model: 'claude-sonnet-4',
-      max_tokens: 8000,
+    const response = await this.provider.complete({
       messages: [{ role: 'user', content: prompt }],
+      max_tokens: 8000
     });
 
-    const content = response.content[0].text;
-    
-    // Extract JSON from response (handle markdown code blocks)
+    const content = response.content;
+
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error('Failed to extract JSON from parser response');
     }
 
     const parsed = JSON.parse(jsonMatch[0]);
-    
-    // Calculate metadata
+
     parsed.metadata = {
       totalRequirements: parsed.requirements.length,
       criticalCount: parsed.requirements.filter(r => r.priority === 'critical').length,
