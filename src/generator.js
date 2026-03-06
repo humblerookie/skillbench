@@ -2,11 +2,9 @@
  * Test Scenario Generator - Create test prompts for each requirement
  */
 
-import Anthropic from '@anthropic-ai/sdk';
-
 export class ScenarioGenerator {
-  constructor(apiKey) {
-    this.client = new Anthropic({ apiKey });
+  constructor(provider) {
+    this.provider = provider;
   }
 
   /**
@@ -69,13 +67,12 @@ Return ONLY valid JSON (no markdown):
   ]
 }`;
 
-    const response = await this.client.messages.create({
-      model: 'claude-sonnet-4',
-      max_tokens: 8000,
+    const response = await this.provider.complete({
       messages: [{ role: 'user', content: prompt }],
+      max_tokens: 8000
     });
 
-    const content = response.content[0].text;
+    const content = response.content;
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error('Failed to extract JSON from generator response');

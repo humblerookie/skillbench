@@ -17,11 +17,16 @@ export class AnthropicProvider extends BaseProvider {
   }
 
   async complete(params) {
-    const { messages, model = 'claude-sonnet-4', temperature = 0.0, max_tokens = 2000 } = params;
+    const { messages, model = 'claude-sonnet-4-5', temperature = 0.0, max_tokens = 2000 } = params;
+
+    // Extract system message if passed in messages array (Anthropic requires it as top-level param)
+    const systemMsg = messages.find(m => m.role === 'system');
+    const userMessages = messages.filter(m => m.role !== 'system');
 
     const response = await this.client.messages.create({
       model: this.mapModel(model),
-      messages,
+      messages: userMessages,
+      ...(systemMsg ? { system: systemMsg.content } : {}),
       max_tokens,
       temperature,
     });
@@ -53,9 +58,9 @@ export class AnthropicProvider extends BaseProvider {
   mapModel(model) {
     // Map generic names to Anthropic-specific
     const modelMap = {
-      'sonnet': 'claude-sonnet-4',
-      'opus': 'claude-opus-4',
-      'haiku': 'claude-haiku-3-5',
+      'sonnet': 'claude-sonnet-4-5',
+      'opus': 'claude-opus-4-5',
+      'haiku': 'claude-haiku-4-5-20251001',
     };
     
     return modelMap[model] || model;

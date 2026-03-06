@@ -6,6 +6,7 @@
 import { AnthropicProvider } from './anthropic-provider.js';
 import { OpenAIProvider } from './openai-provider.js';
 import { OpenClawProvider } from './openclaw-provider.js';
+import { ClaudeCodeProvider } from './claude-code-provider.js';
 
 export class ProviderFactory {
   /**
@@ -28,11 +29,16 @@ export class ProviderFactory {
       
       case 'openclaw':
         return new OpenClawProvider(rest);
-      
+
+      case 'claude-code':
+      case 'claude-subscription':
+      case 'subscription':
+        return new ClaudeCodeProvider(rest);
+
       default:
         throw new Error(
           `Unknown provider: ${provider}. ` +
-          `Supported: anthropic, openai, openclaw`
+          `Supported: anthropic, openai, openclaw, claude-code`
         );
     }
   }
@@ -62,6 +68,6 @@ export class ProviderFactory {
    * @returns {Array<string>}
    */
   static list() {
-    return ['anthropic', 'openai', 'openclaw'];
+    return ['anthropic', 'openai', 'openclaw', 'claude-code'];
   }
 }
