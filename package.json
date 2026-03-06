@@ -8,7 +8,7 @@
     ".": "./index.js"
   },
   "bin": {
-    "evalanche": "./test-two-round.js"
+    "skillbench": "./test-two-round.js"
   },
   "files": [
     "src/",
@@ -38,12 +38,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/humblerookie/evalanche.git"
+    "url": "https://github.com/humblerookie/skillbench.git"
   },
   "bugs": {
-    "url": "https://github.com/humblerookie/evalanche/issues"
+    "url": "https://github.com/humblerookie/skillbench/issues"
   },
-  "homepage": "https://github.com/humblerookie/evalanche#readme",
+  "homepage": "https://github.com/humblerookie/skillbench#readme",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0"
   },
