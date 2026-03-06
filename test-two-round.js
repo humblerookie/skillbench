@@ -9,9 +9,10 @@
  *   node test-two-round.js <path-to-SKILL.md> [--scenarios N]
  *
  * Options:
- *   --scenarios N   Number of LLM-generated scenarios per requirement (default: 2)
+ *   --scenarios N      Number of LLM-generated scenarios per requirement (default: 2)
+ *   --provider NAME    Force a specific provider (anthropic, openai, claude-code)
  *
- * Provider auto-detection (in priority order):
+ * Provider auto-detection (when --provider not set):
  *   ANTHROPIC_API_KEY → anthropic
  *   OPENAI_API_KEY    → openai
  *   (none)            → claude-code (uses local Claude subscription)
@@ -21,8 +22,14 @@ import { TwoRoundEvaluator } from './src/two-round-evaluator.js';
 
 const args = process.argv.slice(2);
 
-// Parse skill path (first non-flag argument)
-const skillPath = args.find(a => !a.startsWith('--')) || '/tmp/skills/SKILL.md';
+// Parse skill path (first non-flag argument, skipping values of --key val flags)
+const flagsWithValues = new Set(['--scenarios', '--max-scenarios', '--provider']);
+let skillPath = null;
+for (let i = 0; i < args.length; i++) {
+  if (flagsWithValues.has(args[i])) { i++; continue; }
+  if (!args[i].startsWith('--')) { skillPath = args[i]; break; }
+}
+skillPath = skillPath || '/tmp/skills/SKILL.md';
 
 // Parse --scenarios N
 const scenariosIdx = args.indexOf('--scenarios');
@@ -42,7 +49,11 @@ if (isNaN(maxScenarios) || maxScenarios < 1) {
   process.exit(1);
 }
 
-const provider = process.env.ANTHROPIC_API_KEY ? 'anthropic' : process.env.OPENAI_API_KEY ? 'openai' : 'claude-code';
+// Parse --provider NAME
+const providerIdx = args.indexOf('--provider');
+const provider = providerIdx !== -1
+  ? args[providerIdx + 1]
+  : process.env.ANTHROPIC_API_KEY ? 'anthropic' : process.env.OPENAI_API_KEY ? 'openai' : 'claude-code';
 const apiKey = process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY;
 
 async function main() {

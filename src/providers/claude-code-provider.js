@@ -36,10 +36,13 @@ export class ClaudeCodeProvider extends BaseProvider {
     }
 
     const stdout = await new Promise((resolve, reject) => {
-      // Unset CLAUDECODE so the subprocess doesn't think it's nested inside Claude Code.
-      // Keep the rest of the environment (auth, PATH, etc.) intact.
+      // Unset Claude Code env vars so the subprocess doesn't think it's nested,
+      // and remove API keys so claude CLI uses the user's subscription.
       const env = { ...process.env };
       delete env.CLAUDECODE;
+      delete env.CLAUDE_CODE_ENTRYPOINT;
+      delete env.ANTHROPIC_API_KEY;
+      delete env.OPENAI_API_KEY;
 
       const child = spawn('claude', args, {
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -63,7 +66,7 @@ export class ClaudeCodeProvider extends BaseProvider {
       child.on('close', code => {
         clearTimeout(timer);
         if (code !== 0) {
-          const msg = err.trim() || `exited with code ${code}`;
+          const msg = err.trim() || out.trim() || `exited with code ${code}`;
           if (msg.includes('nested') || msg.includes('CLAUDECODE')) {
             reject(new Error(
               'ClaudeCodeProvider cannot be used inside a Claude Code session. ' +
