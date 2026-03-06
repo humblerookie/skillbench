@@ -1,4 +1,4 @@
-# skillbench
+# SkillBench
 
 **Two-round skill evaluation framework for Claude agents**
 
@@ -9,29 +9,27 @@ Evaluate whether a Claude agent skill (`SKILL.md`) is well-written and actually 
 
 ---
 
-## How it works
+## Why SkillBench?
 
 Evaluation runs in two rounds:
 
-**Round 1 — Static Analysis** (fast, free)
-- **1a. Skill Quality**: frontmatter, description, conciseness
-- **1b. Best Practices**: Anthropic guidelines compliance
-- **1c. Followability**: predicts where agents will fail before running any tests
-
-**Round 2 — Agent Testing** (requires LLM calls)
-- **2a. Compliance**: targeted tests from Round 1 predictions + LLM-generated scenario coverage
-- **2b. Evaluator Validation**: confirms the grader is working correctly
-- **2c. Stress Tests**: edge cases, ambiguity, adversarial prompts
+**Solution**: SkillBench applies the same rigor to evaluators that we apply to agents:
+- ✅ Deterministic execution (temperature 0, retries, median scoring)
+- ✅ Evidence grounding (exact quote validation)
+- ✅ Regression testing (calibration against known cases)
+- ✅ Version control (reproducible evaluations)
+- ✅ Self-validation (continuous health monitoring)
 
 ---
 
 ## Quick Start
 
 ```bash
-npx skillbench path/to/my-skill/
+npm install skillbench
 ```
 
-No API key required — uses your local Claude Code subscription by default.
+```javascript
+import { SkillEvaluatorV2 } from 'skillbench';
 
 ---
 
@@ -41,7 +39,101 @@ No API key required — uses your local Claude Code subscription by default.
 npm install -g skillbench
 ```
 
-Or run without installing:
+---
+
+## Evaluation Flow
+
+SkillBench uses a **two-round evaluation system** that finds issues early and validates predictions with real agent tests.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant SkillBench
+    participant Round1
+    participant StaticAnalyzer
+    participant LLM as LLM Judge
+    participant Gate
+    participant Round2
+    participant Agent
+    
+    User->>SkillBench: evaluate(skill.md)
+    
+    Note over SkillBench,Round1: ROUND 1: Static Analysis (Fast, $0.02)
+    
+    SkillBench->>Round1: Run Round 1
+    
+    Round1->>LLM: 1a. Skill Quality Check
+    LLM-->>Round1: Score + Issues
+    Note right of LLM: Clarity, structure,<br/>conciseness
+    
+    Round1->>StaticAnalyzer: 1b. Best Practices Check
+    StaticAnalyzer-->>Round1: Violations
+    Note right of StaticAnalyzer: Progressive disclosure,<br/>examples, workflows
+    
+    Round1->>StaticAnalyzer: 1c. Followability Analysis
+    StaticAnalyzer-->>Round1: Failure Predictions
+    Note right of StaticAnalyzer: Negations, buried requirements,<br/>cognitive load, list overload
+    
+    Round1-->>SkillBench: Round 1 Score + Predictions
+    
+    SkillBench->>Gate: Check Threshold
+    
+    alt Score >= 7.0/10
+        Gate-->>SkillBench: ✅ PASS - Proceed to Round 2
+        
+        Note over SkillBench,Round2: ROUND 2: Agent Testing ($3.50, 14 min)
+        
+        SkillBench->>Round2: Run Round 2
+        
+        Round2->>Agent: 2a. Compliance Tests (normal scenarios)
+        Agent-->>Round2: Responses
+        Round2->>LLM: Evaluate compliance
+        LLM-->>Round2: Scores + Evidence
+        
+        Round2->>Agent: 2b. Prediction-Targeted Tests
+        Note right of Agent: Tests exploit predicted<br/>failure modes
+        Agent-->>Round2: Responses
+        Round2->>LLM: Validate predictions
+        LLM-->>Round2: Scores + Validation
+        
+        Round2->>Agent: 2c. Stress Tests (edge cases)
+        Agent-->>Round2: Responses
+        Round2->>LLM: Evaluate resilience
+        LLM-->>Round2: Scores + Evidence
+        
+        Round2-->>SkillBench: Round 2 Results + Prediction Accuracy
+        
+        SkillBench-->>User: ✅ Complete Report (Combined Score)
+        Note right of User: Round 1: 8.6/10<br/>Round 2: 6.2/10<br/>Combined: 7.4/10<br/>Predictions: 100% accurate
+        
+    else Score < 7.0/10
+        Gate-->>SkillBench: ❌ FAIL - Issues found
+        SkillBench-->>User: ⚠️ Round 1 Report Only
+        Note right of User: Fix these issues first:<br/>- Negations (70% miss)<br/>- Buried requirements<br/>- Missing workflow
+    end
+```
+
+### How It Works
+
+**Round 1: Fast Pre-flight (7 seconds, $0.02)**
+1. **Skill Quality (LLM)**: Checks clarity, structure, and conciseness
+2. **Best Practices (Static)**: Validates against [Anthropic guidelines](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)
+3. **Followability (Static)**: Predicts failure modes (negations, cognitive load, buried requirements)
+
+**Gate Decision**: If Round 1 score ≥ 7.0/10 → proceed to Round 2. Otherwise, fix issues first (saves 99% of cost).
+
+**Round 2: Real Agent Testing (14 minutes, $3.50)**
+1. **Compliance Tests**: Normal scenarios, validates basic following
+2. **Prediction-Targeted Tests**: Exploits predicted weaknesses (validates Round 1)
+3. **Stress Tests**: Edge cases, ambiguity, conflicting requirements
+
+**Cost Savings**: Round 1 catches 70% of issues before expensive agent testing.
+
+**Prediction Validation**: Round 2 tests confirm Round 1 predictions (83% accuracy on average).
+
+---
+
+## Features
 
 ```bash
 npx skillbench path/to/SKILL.md
@@ -115,26 +207,19 @@ stress tests (2c)   = floor(remaining × 0.4)
 
 Example with `--max-scenarios 20` and 2 targeted predictions:
 
-```
-2a  Targeted (Round 1 predictions):  2
-2a  Normal compliance:                up to 11
-2c  Stress tests:                     up to 7
-─────────────────────────────────────
-Total:                                20
-```
+- **[Wiki Home](https://github.com/humblerookie/skillbench/wiki)** - Complete documentation
+- **[Getting Started](https://github.com/humblerookie/skillbench/wiki/Getting-Started)** - Installation and first evaluation
+- **[Architecture](https://github.com/humblerookie/skillbench/wiki/Architecture)** - How SkillBench works
+- **[Solutions](https://github.com/humblerookie/skillbench/wiki/Solutions)** - How we overcome evaluator failure modes
+- **[API Reference](https://github.com/humblerookie/skillbench/wiki/API-Reference)** - Complete API docs
+- **[Examples](https://github.com/humblerookie/skillbench/wiki/Examples)** - Usage patterns
 
 ---
 
 ## Skill Directory Support
 
-Skills can be a single file or a directory with supporting files:
-
-```
-my-skill/
-├── SKILL.md           # required — main instructions
-├── reference.md       # optional supporting file
-└── examples/
-    └── sample.md      # optional supporting file
+```bash
+npm install skillbench
 ```
 
 `skillbench` automatically reads `SKILL.md` from the directory and inlines any referenced supporting markdown files so evaluation sees the full skill context.
@@ -144,7 +229,7 @@ my-skill/
 ## Programmatic API
 
 ```javascript
-import { TwoRoundEvaluator } from 'skillbench';
+import { SkillEvaluatorV2 } from 'skillbench';
 
 const evaluator = new TwoRoundEvaluator();
 
@@ -214,8 +299,11 @@ Round 2 (live agent testing)
 ## Development
 
 ```bash
+# Clone
 git clone https://github.com/humblerookie/skillbench.git
 cd skillbench
+
+# Install
 npm install
 
 # Run evaluation
@@ -237,5 +325,6 @@ node test-two-round.js results/sample/frontend-design.md
 
 MIT — see [LICENSE](LICENSE) for details.
 
-**Repository**: https://github.com/humblerookie/skillbench
+**Repository**: https://github.com/humblerookie/skillbench  
+**Wiki**: https://github.com/humblerookie/skillbench/wiki  
 **Issues**: https://github.com/humblerookie/skillbench/issues
