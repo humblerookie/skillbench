@@ -1,4 +1,4 @@
-# Evalanche
+# SkillBench
 
 **Production-ready skill evaluation framework for Claude agents**
 
@@ -9,7 +9,7 @@ Evaluate Claude agent skill compliance with LLM-as-judge scoring that actually w
 
 ---
 
-## Why Evalanche?
+## Why SkillBench?
 
 **Problem**: Basic LLM-as-judge evaluators are unreliable:
 - 🎲 Inconsistent scores (same input → different outputs)
@@ -17,7 +17,7 @@ Evaluate Claude agent skill compliance with LLM-as-judge scoring that actually w
 - 🏷️ Keyword bias (scoring mentions instead of execution)
 - ❓ No ground truth (can't validate the validator)
 
-**Solution**: Evalanche applies the same rigor to evaluators that we apply to agents:
+**Solution**: SkillBench applies the same rigor to evaluators that we apply to agents:
 - ✅ Deterministic execution (temperature 0, retries, median scoring)
 - ✅ Evidence grounding (exact quote validation)
 - ✅ Regression testing (calibration against known cases)
@@ -29,11 +29,11 @@ Evaluate Claude agent skill compliance with LLM-as-judge scoring that actually w
 ## Quick Start
 
 ```bash
-npm install evalanche
+npm install skillbench
 ```
 
 ```javascript
-import { SkillEvaluatorV2 } from 'evalanche';
+import { SkillEvaluatorV2 } from 'skillbench';
 
 const evaluator = new SkillEvaluatorV2(process.env.ANTHROPIC_API_KEY);
 
@@ -45,6 +45,98 @@ const report = await evaluator.evaluate({
 console.log(`Average Score: ${report.summary.averageScore}/10`);
 console.log(`Pass Rate: ${report.summary.passRate}`);
 ```
+
+---
+
+## Evaluation Flow
+
+SkillBench uses a **two-round evaluation system** that finds issues early and validates predictions with real agent tests.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant SkillBench
+    participant Round1
+    participant StaticAnalyzer
+    participant LLM as LLM Judge
+    participant Gate
+    participant Round2
+    participant Agent
+    
+    User->>SkillBench: evaluate(skill.md)
+    
+    Note over SkillBench,Round1: ROUND 1: Static Analysis (Fast, $0.02)
+    
+    SkillBench->>Round1: Run Round 1
+    
+    Round1->>LLM: 1a. Skill Quality Check
+    LLM-->>Round1: Score + Issues
+    Note right of LLM: Clarity, structure,<br/>conciseness
+    
+    Round1->>StaticAnalyzer: 1b. Best Practices Check
+    StaticAnalyzer-->>Round1: Violations
+    Note right of StaticAnalyzer: Progressive disclosure,<br/>examples, workflows
+    
+    Round1->>StaticAnalyzer: 1c. Followability Analysis
+    StaticAnalyzer-->>Round1: Failure Predictions
+    Note right of StaticAnalyzer: Negations, buried requirements,<br/>cognitive load, list overload
+    
+    Round1-->>SkillBench: Round 1 Score + Predictions
+    
+    SkillBench->>Gate: Check Threshold
+    
+    alt Score >= 7.0/10
+        Gate-->>SkillBench: ✅ PASS - Proceed to Round 2
+        
+        Note over SkillBench,Round2: ROUND 2: Agent Testing ($3.50, 14 min)
+        
+        SkillBench->>Round2: Run Round 2
+        
+        Round2->>Agent: 2a. Compliance Tests (normal scenarios)
+        Agent-->>Round2: Responses
+        Round2->>LLM: Evaluate compliance
+        LLM-->>Round2: Scores + Evidence
+        
+        Round2->>Agent: 2b. Prediction-Targeted Tests
+        Note right of Agent: Tests exploit predicted<br/>failure modes
+        Agent-->>Round2: Responses
+        Round2->>LLM: Validate predictions
+        LLM-->>Round2: Scores + Validation
+        
+        Round2->>Agent: 2c. Stress Tests (edge cases)
+        Agent-->>Round2: Responses
+        Round2->>LLM: Evaluate resilience
+        LLM-->>Round2: Scores + Evidence
+        
+        Round2-->>SkillBench: Round 2 Results + Prediction Accuracy
+        
+        SkillBench-->>User: ✅ Complete Report (Combined Score)
+        Note right of User: Round 1: 8.6/10<br/>Round 2: 6.2/10<br/>Combined: 7.4/10<br/>Predictions: 100% accurate
+        
+    else Score < 7.0/10
+        Gate-->>SkillBench: ❌ FAIL - Issues found
+        SkillBench-->>User: ⚠️ Round 1 Report Only
+        Note right of User: Fix these issues first:<br/>- Negations (70% miss)<br/>- Buried requirements<br/>- Missing workflow
+    end
+```
+
+### How It Works
+
+**Round 1: Fast Pre-flight (7 seconds, $0.02)**
+1. **Skill Quality (LLM)**: Checks clarity, structure, and conciseness
+2. **Best Practices (Static)**: Validates against [Anthropic guidelines](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices)
+3. **Followability (Static)**: Predicts failure modes (negations, cognitive load, buried requirements)
+
+**Gate Decision**: If Round 1 score ≥ 7.0/10 → proceed to Round 2. Otherwise, fix issues first (saves 99% of cost).
+
+**Round 2: Real Agent Testing (14 minutes, $3.50)**
+1. **Compliance Tests**: Normal scenarios, validates basic following
+2. **Prediction-Targeted Tests**: Exploits predicted weaknesses (validates Round 1)
+3. **Stress Tests**: Edge cases, ambiguity, conflicting requirements
+
+**Cost Savings**: Round 1 catches 70% of issues before expensive agent testing.
+
+**Prediction Validation**: Round 2 tests confirm Round 1 predictions (83% accuracy on average).
 
 ---
 
@@ -96,19 +188,19 @@ EVALUATOR HEALTH: HEALTHY
 
 ## Documentation
 
-- **[Wiki Home](https://github.com/humblerookie/evalanche/wiki)** - Complete documentation
-- **[Getting Started](https://github.com/humblerookie/evalanche/wiki/Getting-Started)** - Installation and first evaluation
-- **[Architecture](https://github.com/humblerookie/evalanche/wiki/Architecture)** - How Evalanche works
-- **[Solutions](https://github.com/humblerookie/evalanche/wiki/Solutions)** - How we overcome evaluator failure modes
-- **[API Reference](https://github.com/humblerookie/evalanche/wiki/API-Reference)** - Complete API docs
-- **[Examples](https://github.com/humblerookie/evalanche/wiki/Examples)** - Usage patterns
+- **[Wiki Home](https://github.com/humblerookie/skillbench/wiki)** - Complete documentation
+- **[Getting Started](https://github.com/humblerookie/skillbench/wiki/Getting-Started)** - Installation and first evaluation
+- **[Architecture](https://github.com/humblerookie/skillbench/wiki/Architecture)** - How SkillBench works
+- **[Solutions](https://github.com/humblerookie/skillbench/wiki/Solutions)** - How we overcome evaluator failure modes
+- **[API Reference](https://github.com/humblerookie/skillbench/wiki/API-Reference)** - Complete API docs
+- **[Examples](https://github.com/humblerookie/skillbench/wiki/Examples)** - Usage patterns
 
 ---
 
 ## Installation
 
 ```bash
-npm install evalanche
+npm install skillbench
 ```
 
 **Requirements:**
@@ -122,7 +214,7 @@ npm install evalanche
 ### Run Evaluation
 
 ```javascript
-import { SkillEvaluatorV2 } from 'evalanche';
+import { SkillEvaluatorV2 } from 'skillbench';
 
 const evaluator = new SkillEvaluatorV2(process.env.ANTHROPIC_API_KEY);
 
@@ -264,8 +356,8 @@ See **[Examples](https://github.com/humblerookie/evalanche/wiki/Examples)** for 
 
 ```bash
 # Clone
-git clone https://github.com/humblerookie/evalanche.git
-cd evalanche
+git clone https://github.com/humblerookie/skillbench.git
+cd skillbench
 
 # Install
 npm install
@@ -313,6 +405,6 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 Built with Claude Sonnet 4, Node.js, and the Anthropic SDK.
 
-**Repository**: https://github.com/humblerookie/evalanche  
-**Wiki**: https://github.com/humblerookie/evalanche/wiki  
-**Issues**: https://github.com/humblerookie/evalanche/issues
+**Repository**: https://github.com/humblerookie/skillbench  
+**Wiki**: https://github.com/humblerookie/skillbench/wiki  
+**Issues**: https://github.com/humblerookie/skillbench/issues
